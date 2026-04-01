@@ -1,6 +1,7 @@
 from typing import AsyncGenerator
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security.http import HTTPBearer
+from starlette.requests import Request
 from jose import jwt, JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -10,14 +11,14 @@ from app.core.config import settings
 from app.models.user import User, UserRole
 from app.schemas.auth import TokenData
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+security = HTTPBearer()
 
 async def get_db() -> AsyncGenerator:
     async with SessionLocal() as session:
         yield session
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> User:
     credentials_exception = HTTPException(
@@ -25,6 +26,13 @@ async def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise credentials_exception
+    
+    token = auth_header.split(" ")[1]
+    
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         email: str = payload.get("sub")
@@ -42,10 +50,10 @@ async def get_current_user(
 
 
 async def get_current_active_owner(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> User:
-    user = await get_current_user(token=token, db=db)
+    user = await get_current_user(request=request, db=db)
     if user.role != UserRole.OWNER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -55,10 +63,10 @@ async def get_current_active_owner(
 
 
 async def get_current_active_cashier(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> User:
-    user = await get_current_user(token=token, db=db)
+    user = await get_current_user(request=request, db=db)
     if user.role not in [UserRole.CASHIER, UserRole.OWNER]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

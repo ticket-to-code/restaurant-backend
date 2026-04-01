@@ -15,9 +15,9 @@ class Product(Base):
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), nullable=False)
     restaurant_id: Mapped[int] = mapped_column(ForeignKey("restaurants.id"), nullable=False)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     # Relationships
