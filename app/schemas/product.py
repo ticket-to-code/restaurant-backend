@@ -1,41 +1,42 @@
-from pydantic import BaseModel, Field
+from typing import List, Optional
 from decimal import Decimal
 from datetime import datetime
+from pydantic import BaseModel
+
 
 class ProductBase(BaseModel):
-    name: str = Field(..., min_length=2, max_length=100)
-    price: Decimal = Field(..., gt=0, max_digits=10, decimal_places=2)
-    category_id: int
-    description: str | None = Field(None, max_length=500)
-    image_url: str | None = None
+    name: str
+    description: Optional[str] = None
+    price: Decimal
+    category_id: Optional[int] = None
+    is_available: bool = True
+
 
 class ProductCreate(ProductBase):
-    pass
+    restaurant_id: int
+
 
 class ProductUpdate(BaseModel):
-    name: str = Field(..., min_length=2, max_length=100)
-    price: Decimal = Field(..., gt=0, max_digits=10, decimal_places=2)
-    category_id: int
-    description: str | None = Field(None, max_length=500)
-    image_url: str | None = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    price: Optional[Decimal] = None
+    category_id: Optional[int] = None
+    is_available: Optional[bool] = None
 
-class ProductResponse(ProductBase):
+
+class ProductRead(ProductBase):
     id: int
-    is_available: bool
+    restaurant_id: int
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
 
 class ProductListResponse(BaseModel):
-    id: int
-    name: str
-    price: Decimal
-    category_id: int
-    category_name: str
-    is_available: bool
-    image_url: str | None
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
+    items: List[ProductRead]
+    total: int
+    skip: int
+    limit: int
