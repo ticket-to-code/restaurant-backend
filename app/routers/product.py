@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, status, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.dependencies import get_db, get_current_active_owner
 from app.models.user import User
-from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse, ProductListResponse
+from app.schemas.product import ProductListResponse, PaginatedProducts
 from app.services import product as product_service
 
-router = APIRouter(prefix="/menu", tags=["Menu - Products"])
+router = APIRouter()
 
-@router.get("/products", response_model=list[ProductListResponse])
+
+@router.get("/products", response_model=PaginatedProducts)
 async def get_products(
     category_id: int | None = Query(None),
     search: str | None = Query(None),
@@ -17,16 +20,14 @@ async def get_products(
     db: AsyncSession = Depends(get_db)
 ):
     """Get products with optional filtering by category and search (Owner only)"""
-    products = await product_service.get_products(
+    products, total_count = await product_service.list_products_with_count(
         db, current_user.restaurant_id, category_id, search, skip, limit
     )
-    
+
     # Enrich with category names
-    from sqlalchemy.future import select
-    from sqlalchemy import and_
     from app.models.category import Category
-    
-    enriched = []
+
+    enriched: list[ProductListResponse] = []
     for product in products:
         cat_result = await db.execute(
             select(Category).where(Category.id == product.category_id)
@@ -42,42 +43,10 @@ async def get_products(
             "image_url": product.image_url,
             "created_at": product.created_at
         })
-    
-    return enriched
 
-@router.post("/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
-async def create_product(
-    product_data: ProductCreate,
-    current_user: User = Depends(get_current_active_owner),
-    db: AsyncSession = Depends(get_db)
-):
-    """Create a new product (Owner only)"""
-    return await product_service.create_product(db, current_user.restaurant_id, product_data)
-
-@router.put("/products/{product_id}", response_model=ProductResponse)
-async def update_product(
-    product_id: int,
-    product_data: ProductUpdate,
-    current_user: User = Depends(get_current_active_owner),
-    db: AsyncSession = Depends(get_db)
-):
-    """Update a product (Owner only)"""
-    return await product_service.update_product(db, current_user.restaurant_id, product_id, product_data)
-
-@router.patch("/products/{product_id}/toggle", response_model=ProductResponse)
-async def toggle_product(
-    product_id: int,
-    current_user: User = Depends(get_current_active_owner),
-    db: AsyncSession = Depends(get_db)
-):
-    """Toggle product availability (Owner only)"""
-    return await product_service.toggle_product_availability(db, current_user.restaurant_id, product_id)
-
-@router.delete("/products/{product_id}", status_code=status.HTTP_200_OK)
-async def delete_product(
-    product_id: int,
-    current_user: User = Depends(get_current_active_owner),
-    db: AsyncSession = Depends(get_db)
-):
-    """Delete a product (soft delete, Owner only)"""
-    return await product_service.delete_product(db, current_user.restaurant_id, product_id)
+    return {
+        "items": enriched,
+        "total_count": total_count,
+        "skip": skip,
+        "limit": limit,
+    }
